@@ -1,0 +1,125 @@
+import streamlit as st
+import os
+import cv2
+import numpy as np
+import subprocess
+import glob
+
+# Set up YOLOv5 directory
+if not os.path.exists('yolov5'):
+    subprocess.run(['git', 'clone', 'https://github.com/ultralytics/yolov5.git'])
+os.chdir('yolov5')
+subprocess.run(['pip', 'install', '-r', 'requirements.txt'])
+
+# Streamlit app
+st.title("Fire Door and Floor Predictive Maintenance")
+st.write("Upload an image to detect defects and get maintenance recommendations.")
+
+# File uploader
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    # Save the uploaded image
+    image_filename = uploaded_file.name
+    with open(image_filename, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    
+    # Run YOLOv5 inference with the new weights, save confidence, and use augmentation
+    subprocess.run([
+        'python', 'detect.py',
+        '--weights', '/content/yolov5/runs/train/exp2/weights/best.pt',
+        '--img', '640',
+        '--conf', '0.01',
+        '--source', image_filename,
+        '--save-txt',
+        '--save-conf',
+        '--augment'
+    ])
+
+    # Find the latest exp folder
+    exp_folders = glob.glob('runs/detect/exp*')
+    latest_exp = max(exp_folders, key=os.path.getctime)
+    label_filename = image_filename.replace('.jpg', '.txt').replace('.jpeg', '.txt').replace('.png', '.txt')
+    label_path = os.path.join(latest_exp, 'labels', label_filename)
+
+    # Load and display the output image
+    output_image_path = os.path.join(latest_exp, image_filename)
+    if os.path.exists(output_image_path):
+        output_image = cv2.imread(output_image_path)
+        output_image = cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB)
+        st.image(output_image, caption="Detected Defects", use_column_width=True)
+    else:
+        st.write("Output image not found at:", output_image_path)
+
+    # Parse detection results and calculate dimensions
+    image_width, image_height = 640, 640
+
+    if os.path.exists(label_path):
+        with open(label_path, 'r') as f:
+            detections = f.readlines()
+
+        st.write("### Detected Defects and Maintenance Recommendations:")
+        for detection in detections:
+            values = detection.strip().split()
+            if len(values) == 6:
+                class_id, x_center, y_center, bbox_width, bbox_height, conf = map(float, values)
+            elif len(values) == 5:
+                class_id, x_center, y_center, bbox_width, bbox_height = map(float, values)
+                conf = 0.0
+            else:
+                st.write(f"Skipping invalid detection line: {detection.strip()}")
+                continue
+
+            class_id = int(class_id)
+            class_name = ['crack', 'dent', 'scratch'][class_id]
+
+            # Calculate dimensions in pixels
+            defect_length_px = bbox_width * image_width
+            defect_width_px = bbox_height * image_height
+
+            # Determine severity for cracks
+            severity = 'Unknown'
+            priority = 'Low'
+            if class_name == 'crack':
+                if defect_length_px > 100 and defect_width_px < 20:
+                    severity = 'Minor'
+                    priority = 'Medium'
+                elif abs(defect_length_px - defect_width_px) < 50:
+                    severity = 'Serious'
+                    priority = 'High'
+                elif defect_length_px > 200 and defect_width_px > 100:
+                    severity = 'Gaping'
+                    priority = 'Urgent'
+                else:
+                    severity = 'Moderate'
+                    priority = 'Medium'
+            elif class_name == 'dent':
+                severity = 'Moderate'
+                priority = 'Medium'
+            elif class_name == 'scratch':
+                severity = 'Minor'
+                priority = 'Low'
+
+            st.write(f"- **{class_name}** (Confidence: {conf:.2f})")
+            if class_name == 'crack':
+                st.write(f"  - **Dimensions**: Length = {defect_length_px:.1f}px, Width = {defect_width_px:.1f}px")
+                st.write(f"  - **Severity**: {severity} crack")
+                st.write(f"  - **Priority**: {priority}")
+                if severity == 'Minor':
+                    st.write("  - **Recommendation**: Monitor the crack; schedule an inspection to assess potential growth.")
+                elif severity == 'Serious':
+                    st.write("  - **Recommendation**: Immediate repair required. This crack may indicate deeper structural damage.")
+                elif severity == 'Gaping':
+                    st.write("  - **Recommendation**: Urgent action needed. Replace or reinforce the affected area immediately.")
+                else:
+                    st.write("  - **Recommendation**: Schedule repair to prevent further deterioration.")
+            elif class_name == 'dent':
+                st.write(f"  - **Severity**: {severity}")
+                st.write(f"  - **Priority**: {priority}")
+                st.write("  - **Recommendation**: Schedule repair to prevent further damage.")
+            elif class_name == 'scratch':
+                st.write(f"  - **Severity**: {severity}")
+                st.write(f"  - **Priority**: {priority}")
+                st.write("  - **Recommendation**: Monitor; consider repainting to prevent rust.")
+    else:
+        st.write("No defects detected. Label file not found at:", label_path)
