@@ -18,20 +18,48 @@ if uploaded_file is not None:
     with open(image_filename, "wb") as f:
         f.write(uploaded_file.getbuffer())
     
-    # Run YOLOv5 inference with the new weights, save confidence, and use augmentation
-    subprocess.run([
-        'python', 'yolov5/detect.py',
-        '--weights', 'yolov5/runs/train/exp2/weights/best.pt',
-        '--img', '640',
-        '--conf', '0.01',
-        '--source', image_filename,
-        '--save-txt',
-        '--save-conf',
-        '--augment'
-    ])
+    # Verify the image and weights file exist
+    weights_path = 'yolov5/runs/train/exp2/weights/best.pt'
+    if not os.path.exists(image_filename):
+        st.error(f"Error: Image file {image_filename} not found after saving.")
+        st.stop()
+    if not os.path.exists(weights_path):
+        st.error(f"Error: Weights file {weights_path} not found.")
+        st.stop()
+
+    # Run YOLOv5 inference with error capturing
+    try:
+        result = subprocess.run([
+            'python', 'yolov5/detect.py',
+            '--weights', weights_path,
+            '--img', '640',
+            '--conf', '0.01',
+            '--source', image_filename,
+            '--save-txt',
+            '--save-conf',
+            '--augment'
+        ], capture_output=True, text=True, check=True)
+        st.write("Inference Output:")
+        st.write(result.stdout)
+        if result.stderr:
+            st.write("Inference Errors:")
+            st.write(result.stderr)
+    except subprocess.CalledProcessError as e:
+        st.error("Error running detect.py:")
+        st.write(e.stdout)
+        st.write(e.stderr)
+        st.stop()
 
     # Find the latest exp folder
     exp_folders = glob.glob('yolov5/runs/detect/exp*')
+    if not exp_folders:
+        st.error("No detection results found. The inference may have failed.")
+        st.write("Current directory contents:")
+        st.write(os.listdir('.'))
+        st.write("yolov5/runs directory contents:")
+        st.write(os.listdir('yolov5/runs') if os.path.exists('yolov5/runs') else "yolov5/runs does not exist")
+        st.stop()
+
     latest_exp = max(exp_folders, key=os.path.getctime)
     label_filename = image_filename.replace('.jpg', '.txt').replace('.jpeg', '.txt').replace('.png', '.txt')
     label_path = os.path.join(latest_exp, 'labels', label_filename)
