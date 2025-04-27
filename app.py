@@ -5,12 +5,6 @@ import numpy as np
 import subprocess
 import glob
 
-# Set up YOLOv5 directory
-if not os.path.exists('yolov5'):
-    subprocess.run(['git', 'clone', 'https://github.com/ultralytics/yolov5.git'])
-os.chdir('yolov5')
-subprocess.run(['pip', 'install', '-r', 'requirements.txt'])
-
 # Streamlit app
 st.title("Fire Door and Floor Predictive Maintenance")
 st.write("Upload an image to detect defects and get maintenance recommendations.")
@@ -26,8 +20,8 @@ if uploaded_file is not None:
     
     # Run YOLOv5 inference with the new weights, save confidence, and use augmentation
     subprocess.run([
-        'python', 'detect.py',
-        '--weights', '/content/yolov5/runs/train/exp2/weights/best.pt',
+        'python', 'yolov5/detect.py',
+        '--weights', 'yolov5/runs/train/exp2/weights/best.pt',
         '--img', '640',
         '--conf', '0.01',
         '--source', image_filename,
@@ -37,7 +31,7 @@ if uploaded_file is not None:
     ])
 
     # Find the latest exp folder
-    exp_folders = glob.glob('runs/detect/exp*')
+    exp_folders = glob.glob('yolov5/runs/detect/exp*')
     latest_exp = max(exp_folders, key=os.path.getctime)
     label_filename = image_filename.replace('.jpg', '.txt').replace('.jpeg', '.txt').replace('.png', '.txt')
     label_path = os.path.join(latest_exp, 'labels', label_filename)
