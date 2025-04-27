@@ -7,13 +7,13 @@ import glob
 import sys
 import shutil
 
-# Debug Python environment
+# Debug Python environment (optional, you can keep or remove this)
 st.write("Python version:", sys.version)
 st.write("Python executable:", sys.executable)
 python_path = sys.executable  # Use the same Python as app.py
 st.write("Python path used by subprocess:", python_path)
 
-# Check if torch is installed
+# Check if torch is installed (optional, you can keep or remove this)
 try:
     import torch
     st.write("Torch version:", torch.__version__)
@@ -29,7 +29,7 @@ except ImportError:
         st.stop()
 
 # Streamlit app
-st.title("Fire Door and Floor Predictive Maintenance")
+st.title("Defect Detecion and Predictive Maintenance Model (BETA)")
 st.write("Upload an image to detect defects and get maintenance recommendations.")
 
 # File uploader
@@ -50,23 +50,24 @@ if uploaded_file is not None:
         st.error(f"Error: Weights file {weights_path} not found.")
         st.stop()
 
-    # Run YOLOv5 inference with error capturing
+    # Run YOLOv5 inference without displaying output
     try:
         result = subprocess.run([
             python_path, 'yolov5/detect.py',
             '--weights', weights_path,
             '--img', '640',
-            '--conf', '0.2',
+            '--conf', '0.25',  # Using the updated conf_thres
             '--source', image_filename,
             '--save-txt',
             '--save-conf',
             '--augment'
         ], capture_output=True, text=True, check=True)
-        st.write("Inference Output:")
-        st.write(result.stdout)
-        if result.stderr:
-            st.write("Inference Errors:")
-            st.write(result.stderr)
+        # Removed the display of inference output and errors
+        # st.write("Inference Output:")
+        # st.write(result.stdout)
+        # if result.stderr:
+        #     st.write("Inference Errors:")
+        #     st.write(result.stderr)
     except subprocess.CalledProcessError as e:
         st.error("Error running detect.py:")
         st.write(e.stdout)
