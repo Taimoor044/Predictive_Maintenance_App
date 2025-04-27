@@ -10,22 +10,22 @@ import shutil
 # Debug Python environment
 st.write("Python version:", sys.version)
 st.write("Python executable:", sys.executable)
-python_path = shutil.which('python')
+python_path = sys.executable  # Use the same Python as app.py
 st.write("Python path used by subprocess:", python_path)
 
-# Check if torch is installed, install if missing
+# Check if torch is installed
 try:
     import torch
     st.write("Torch version:", torch.__version__)
 except ImportError:
-    st.write("Torch not found, attempting to install...")
-    subprocess.run([python_path, '-m', 'pip', 'install', 'torch==2.0.1', '--find-links', 'https://download.pytorch.org/whl/cpu/torch-2.0.1%2Bcpu-cp311-cp311-linux_x86_64.whl'])
-    subprocess.run([python_path, '-m', 'pip', 'install', 'torchvision==0.15.2', '--find-links', 'https://download.pytorch.org/whl/cpu/torchvision-0.15.2%2Bcpu-cp311-cp311-linux_x86_64.whl'])
+    st.error("Torch is not installed in the main app environment. Attempting to install...")
+    subprocess.run([python_path, '-m', 'pip', 'install', 'torch==2.0.1', '--index-url', 'https://download.pytorch.org/whl/cpu'])
+    subprocess.run([python_path, '-m', 'pip', 'install', 'torchvision==0.15.2', '--index-url', 'https://download.pytorch.org/whl/cpu'])
     try:
         import torch
         st.write("Torch installed successfully:", torch.__version__)
     except ImportError:
-        st.error("Failed to install torch. Please check the logs.")
+        st.error("Failed to install torch dynamically. Please check the logs.")
         st.stop()
 
 # Streamlit app
