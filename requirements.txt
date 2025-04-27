@@ -1,3 +1,7 @@
 streamlit
 opencv-python-headless
 torch
+numpy
+pyyaml
+requests
+tqdm
