@@ -1,7 +1,7 @@
 streamlit
 opencv-python-headless
-torch==2.0.1 --find-links https://download.pytorch.org/whl/cpu/torch-2.0.1%2Bcpu-cp311-cp311-linux_x86_64.whl
-torchvision==0.15.2 --find-links https://download.pytorch.org/whl/cpu/torchvision-0.15.2%2Bcpu-cp311-cp311-linux_x86_64.whl
+torch==2.0.1+cpu
+torchvision==0.15.2+cpu
 numpy
 pyyaml
 requests
