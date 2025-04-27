@@ -4,6 +4,21 @@ import cv2
 import numpy as np
 import subprocess
 import glob
+import sys
+import shutil
+
+# Debug Python environment
+st.write("Python version:", sys.version)
+st.write("Python executable:", sys.executable)
+python_path = shutil.which('python')
+st.write("Python path used by subprocess:", python_path)
+
+# Check if torch is installed
+try:
+    import torch
+    st.write("Torch version:", torch.__version__)
+except ImportError:
+    st.error("Torch is not installed in the main app environment.")
 
 # Streamlit app
 st.title("Fire Door and Floor Predictive Maintenance")
@@ -30,7 +45,7 @@ if uploaded_file is not None:
     # Run YOLOv5 inference with error capturing
     try:
         result = subprocess.run([
-            'python', 'yolov5/detect.py',
+            python_path, 'yolov5/detect.py',
             '--weights', weights_path,
             '--img', '640',
             '--conf', '0.01',
