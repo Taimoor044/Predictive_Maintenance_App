@@ -56,7 +56,7 @@ if uploaded_file is not None:
             python_path, 'yolov5/detect.py',
             '--weights', weights_path,
             '--img', '640',
-            '--conf', '0.8',
+            '--conf', '0.5',
             '--source', image_filename,
             '--save-txt',
             '--save-conf',
