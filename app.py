@@ -1,16 +1,25 @@
 import streamlit as st
+st.write("Debug: Starting app.py")
 import os
+st.write("Debug: Imported os")
 import cv2
+st.write("Debug: Imported cv2")
 import numpy as np
+st.write("Debug: Imported numpy")
 import subprocess
+st.write("Debug: Imported subprocess")
 import glob
+st.write("Debug: Imported glob")
 import sys
+st.write("Debug: Imported sys")
 import shutil
+st.write("Debug: Imported shutil")
 
 python_path = "/home/adminuser/venv/bin/python3"
+st.write(f"Debug: Set python_path to {python_path}")
 
 # Streamlit app
-st.title("Defect Detection and Predictive Maintenance Model")
+st.title("Fire Door and Floor Predictive Maintenance")
 st.write("Upload an image to detect defects and get maintenance predictions.")
 
 # File uploader
@@ -21,38 +30,56 @@ months_since_maintenance = st.number_input("Months since last maintenance", min_
 if uploaded_file is not None:
     # Save the uploaded image
     image_filename = uploaded_file.name
+    st.write(f"Debug: Saving image as {image_filename}")
     with open(image_filename, "wb") as f:
         f.write(uploaded_file.getbuffer())
     
     # Verify the image and weights file exist
     weights_path = 'yolov5/runs/train/exp2/weights/best.pt'
+    st.write(f"Debug: Checking if image exists at {image_filename}: {os.path.exists(image_filename)}")
     if not os.path.exists(image_filename):
         st.error(f"Error: Image file {image_filename} not found after saving.")
         st.stop()
+    st.write(f"Debug: Checking if weights exist at {weights_path}: {os.path.exists(weights_path)}")
     if not os.path.exists(weights_path):
         st.error(f"Error: Weights file {weights_path} not found.")
         st.stop()
 
     # Run YOLOv5 inference without displaying output
+    st.write("Debug: Running YOLOv5 inference...")
     try:
         result = subprocess.run([
             python_path, 'yolov5/detect.py',
             '--weights', weights_path,
             '--img', '640',
-            '--conf', '0.25',
+            '--conf', '0.5',
             '--source', image_filename,
             '--save-txt',
             '--save-conf',
             '--augment'
-        ], capture_output=True, text=True, check=True)
+        ], capture_output=True, text=True, check=True, timeout=300)
+        st.write("Debug: Inference completed successfully.")
+        if result.stdout:
+            st.write("Debug: Inference stdout:", result.stdout)
+        if result.stderr:
+            st.write("Debug: Inference stderr:", result.stderr)
+    except subprocess.TimeoutExpired:
+        st.error("Inference timed out after 5 minutes. The image may be too large or the server may be under heavy load.")
+        st.stop()
     except subprocess.CalledProcessError as e:
         st.error("Error running detect.py:")
-        st.write(e.stdout)
-        st.write(e.stderr)
+        st.write("Debug: Inference stdout:", e.stdout)
+        st.write("Debug: Inference stderr:", e.stderr)
+        st.stop()
+    except Exception as e:
+        st.error("Unexpected error during inference:")
+        st.write(f"Debug: Error message: {str(e)}")
         st.stop()
 
     # Find the latest exp folder
+    st.write("Debug: Looking for exp folders in yolov5/runs/detect...")
     exp_folders = glob.glob('yolov5/runs/detect/exp*')
+    st.write(f"Debug: Found exp folders: {exp_folders}")
     if not exp_folders:
         st.error("No detection results found. The inference may have failed.")
         st.write("Current directory contents:")
@@ -62,11 +89,14 @@ if uploaded_file is not None:
         st.stop()
 
     latest_exp = max(exp_folders, key=os.path.getctime)
+    st.write(f"Debug: Latest exp folder: {latest_exp}")
     label_filename = image_filename.replace('.jpg', '.txt').replace('.jpeg', '.txt').replace('.png', '.txt')
     label_path = os.path.join(latest_exp, 'labels', label_filename)
+    st.write(f"Debug: Looking for label file at {label_path}")
 
     # Load and display the output image
     output_image_path = os.path.join(latest_exp, image_filename)
+    st.write(f"Debug: Checking for output image at {output_image_path}: {os.path.exists(output_image_path)}")
     if os.path.exists(output_image_path):
         output_image = cv2.imread(output_image_path)
         output_image = cv2.cvtColor(output_image, cv2.COLOR_BGR2RGB)
@@ -78,6 +108,7 @@ if uploaded_file is not None:
     image_width, image_height = 640, 640
 
     if os.path.exists(label_path):
+        st.write("Debug: Label file found, processing detections...")
         with open(label_path, 'r') as f:
             detections = f.readlines()
 
@@ -166,6 +197,7 @@ if uploaded_file is not None:
                 st.write(f"  - **Prediction**: {prediction}")
                 st.write("  - **Recommendation**: Monitor; consider repainting to prevent rust.")
     else:
+        st.write("Debug: No label file found, proceeding to questions section...")
         st.write("No defects detected in the image.")
         st.write("### Let's make an educated prediction based on the condition of the door/floor.")
         
