@@ -10,7 +10,7 @@ import shutil
 python_path = "/home/adminuser/venv/bin/python3"
 
 # Streamlit app
-st.title("Fire Door and Floor Predictive Maintenance")
+st.title("Defect Detection and Predictive Maintenance Model")
 st.write("Upload an image to detect defects and get maintenance predictions.")
 
 # File uploader
@@ -39,7 +39,7 @@ if uploaded_file is not None:
             python_path, 'yolov5/detect.py',
             '--weights', weights_path,
             '--img', '640',
-            '--conf', '0.5',
+            '--conf', '0.25',
             '--source', image_filename,
             '--save-txt',
             '--save-conf',
