@@ -18,14 +18,28 @@ st.write("Debug: Imported shutil")
 python_path = "/home/adminuser/venv/bin/python3"
 st.write(f"Debug: Set python_path to {python_path}")
 
+# Simulated dataset for defect probability based on conditions
+simulated_dataset = {
+    # (age_range, usage, temp_range, moisture_level): defect_probability
+    ("old", "heavy", "high", "high"): 0.80,  # 80% chance of defect
+    ("old", "heavy", "high", "medium"): 0.70,
+    ("old", "heavy", "low", "high"): 0.65,
+    ("old", "moderate", "high", "high"): 0.60,
+    ("old", "light", "low", "low"): 0.30,
+    ("medium", "heavy", "high", "high"): 0.50,
+    ("medium", "moderate", "medium", "medium"): 0.40,
+    ("medium", "light", "low", "low"): 0.20,
+    ("new", "heavy", "high", "high"): 0.30,
+    ("new", "moderate", "medium", "medium"): 0.15,
+    ("new", "light", "low", "low"): 0.10,
+}
+
 # Streamlit app
 st.title("Fire Door and Floor Predictive Maintenance")
 st.write("Upload an image to detect defects and get maintenance predictions.")
 
 # File uploader
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-# User input for time since last maintenance
-months_since_maintenance = st.number_input("Months since last maintenance", min_value=0, value=0, step=1)
 
 if uploaded_file is not None:
     # Save the uploaded image
@@ -112,7 +126,7 @@ if uploaded_file is not None:
         with open(label_path, 'r') as f:
             detections = f.readlines()
 
-        st.write("### Detected Defects and Maintenance Predictions:")
+        st.write("### Detected Defects and Maintenance Recommendations:")
         for detection in detections:
             values = detection.strip().split()
             if len(values) == 6:
@@ -131,71 +145,50 @@ if uploaded_file is not None:
             defect_length_px = bbox_width * image_width
             defect_width_px = bbox_height * image_height
 
-            # Determine severity for cracks
-            severity = 'Unknown'
-            priority = 'Low'
-            if class_name == 'crack':
-                if defect_length_px > 100 and defect_width_px < 20:
-                    severity = 'Minor'
-                    priority = 'Medium'
-                elif abs(defect_length_px - defect_width_px) < 50:
-                    severity = 'Serious'
-                    priority = 'High'
-                elif defect_length_px > 200 and defect_width_px > 100:
-                    severity = 'Gaping'
-                    priority = 'Urgent'
-                else:
-                    severity = 'Moderate'
-                    priority = 'Medium'
-            elif class_name == 'dent':
+            # Calculate severity score (based on dimensions and defect type)
+            base_score = {'crack': 3, 'dent': 2, 'scratch': 1}  # Base severity by type
+            size_factor = (defect_length_px * defect_width_px) / (image_width * image_height)  # Normalized area
+            severity_score = base_score[class_name] + (size_factor * 10)  # Scale size impact
+            severity_score = min(severity_score, 10)  # Cap at 10
+
+            # Determine severity and priority based on score
+            if severity_score >= 8:
+                severity = 'Severe'
+                priority = 'Urgent'
+            elif severity_score >= 5:
                 severity = 'Moderate'
-                priority = 'Medium'
-            elif class_name == 'scratch':
+                priority = 'High'
+            elif severity_score >= 2:
                 severity = 'Minor'
+                priority = 'Medium'
+            else:
+                severity = 'Negligible'
                 priority = 'Low'
 
-            # Simulate deterioration rate and predict maintenance timeline
-            deterioration_rate = {'crack': 0.1, 'dent': 0.05, 'scratch': 0.02}  # Monthly growth rate
-            severity_score = {'Minor': 1, 'Moderate': 2, 'Serious': 3, 'Gaping': 4, 'Unknown': 1}
-            current_score = severity_score.get(severity, 1)
-            rate = deterioration_rate[class_name]
-            # Adjust score based on time since last maintenance
-            adjusted_score = current_score + (rate * months_since_maintenance)
-            # Estimate months until critical (severity score reaches 4)
-            months_to_critical = (4 - adjusted_score) / rate if rate > 0 else float('inf')
-            if months_to_critical == float('inf') or months_to_critical < 0:
-                prediction = "No immediate deterioration predicted."
-            else:
-                prediction = f"Predicted to become critical in approximately {int(months_to_critical)} months."
-            # Adjust priority if time since maintenance is high
-            if months_since_maintenance > 12 and priority != 'Urgent':
-                priority = 'High'
-                prediction += " (Priority increased due to long time since last maintenance)"
-
             st.write(f"- **{class_name}** (Confidence: {conf:.2f})")
+            st.write(f"  - **Dimensions**: Length = {defect_length_px:.1f}px, Width = {defect_width_px:.1f}px")
+            st.write(f"  - **Severity Score**: {severity_score:.1f}/10")
+            st.write(f"  - **Severity**: {severity}")
+            st.write(f"  - **Priority**: {priority}")
             if class_name == 'crack':
-                st.write(f"  - **Dimensions**: Length = {defect_length_px:.1f}px, Width = {defect_width_px:.1f}px")
-                st.write(f"  - **Severity**: {severity} crack")
-                st.write(f"  - **Priority**: {priority}")
-                st.write(f"  - **Prediction**: {prediction}")
-                if severity == 'Minor':
-                    st.write("  - **Recommendation**: Monitor the crack; schedule an inspection to assess potential growth.")
-                elif severity == 'Serious':
-                    st.write("  - **Recommendation**: Immediate repair required. This crack may indicate deeper structural damage.")
-                elif severity == 'Gaping':
+                if severity == 'Severe':
                     st.write("  - **Recommendation**: Urgent action needed. Replace or reinforce the affected area immediately.")
-                else:
+                elif severity == 'Moderate':
                     st.write("  - **Recommendation**: Schedule repair to prevent further deterioration.")
+                elif severity == 'Minor':
+                    st.write("  - **Recommendation**: Monitor the crack; schedule an inspection to assess potential growth.")
+                else:
+                    st.write("  - **Recommendation**: Monitor periodically.")
             elif class_name == 'dent':
-                st.write(f"  - **Severity**: {severity}")
-                st.write(f"  - **Priority**: {priority}")
-                st.write(f"  - **Prediction**: {prediction}")
-                st.write("  - **Recommendation**: Schedule repair to prevent further damage.")
+                if severity in ['Severe', 'Moderate']:
+                    st.write("  - **Recommendation**: Schedule repair to prevent further damage.")
+                else:
+                    st.write("  - **Recommendation**: Monitor periodically.")
             elif class_name == 'scratch':
-                st.write(f"  - **Severity**: {severity}")
-                st.write(f"  - **Priority**: {priority}")
-                st.write(f"  - **Prediction**: {prediction}")
-                st.write("  - **Recommendation**: Monitor; consider repainting to prevent rust.")
+                if severity == 'Severe':
+                    st.write("  - **Recommendation**: Schedule repair to prevent rust.")
+                else:
+                    st.write("  - **Recommendation**: Monitor; consider repainting to prevent rust.")
     else:
         st.write("Debug: No label file found, proceeding to questions section...")
         st.write("No defects detected in the image.")
@@ -204,9 +197,20 @@ if uploaded_file is not None:
         # Questions for the user
         age_years = st.number_input("How old is the door/floor (in years)?", min_value=0, value=0, step=1)
         usage_frequency = st.selectbox("How often is the door/floor used?", ["Rarely (e.g., a few times a month)", "Moderately (e.g., daily)", "Heavily (e.g., multiple times a day)"])
-        moisture_exposure = st.selectbox("Is the door/floor exposed to moisture (e.g., rain, humidity)?", ["No", "Sometimes", "Frequently"])
+        temperature = st.number_input("What is the average temperature the door/floor is exposed to (in °C)?", min_value=-50.0, max_value=100.0, value=20.0, step=1.0)
+        moisture_level = st.selectbox("What is the typical moisture level the door/floor is exposed to?", ["Low (e.g., dry environment)", "Medium (e.g., occasional humidity)", "High (e.g., frequent rain or humidity)"])
 
-        # Calculate a risk score based on answers
+        # Map user input to dataset categories
+        age_range = "new" if age_years < 5 else "medium" if age_years < 10 else "old"
+        usage = "light" if usage_frequency == "Rarely (e.g., a few times a month)" else "moderate" if usage_frequency == "Moderately (e.g., daily)" else "heavy"
+        temp_range = "low" if temperature < 20 else "medium" if temperature < 30 else "high"
+        moisture = "low" if moisture_level == "Low (e.g., dry environment)" else "medium" if moisture_level == "Medium (e.g., occasional humidity)" else "high"
+
+        # Look up defect probability in the simulated dataset
+        condition_key = (age_range, usage, temp_range, moisture)
+        defect_probability = simulated_dataset.get(condition_key, 0.40)  # Default to 40% if exact match not found
+
+        # Calculate a risk score based on conditions
         risk_score = 0
         # Age factor
         if age_years > 10:
@@ -218,24 +222,30 @@ if uploaded_file is not None:
             risk_score += 2
         elif usage_frequency == "Moderately (e.g., daily)":
             risk_score += 1
-        # Moisture factor
-        if moisture_exposure == "Frequently":
+        # Temperature factor
+        if temperature > 30:
             risk_score += 2
-        elif moisture_exposure == "Sometimes":
+        elif temperature > 20:
             risk_score += 1
-        # Adjust risk based on time since last maintenance
-        if months_since_maintenance > 12:
+        # Moisture factor
+        if moisture_level == "High (e.g., frequent rain or humidity)":
+            risk_score += 2
+        elif moisture_level == "Medium (e.g., occasional humidity)":
             risk_score += 1
+
+        # Adjust risk score based on defect probability
+        risk_score += (defect_probability * 5)  # Scale probability impact (max 4 points)
 
         # Make an educated prediction
         st.write("### Maintenance Prediction Based on Conditions:")
-        if risk_score >= 4:
+        st.write(f"- **Estimated Defect Probability**: {defect_probability * 100:.0f}% (based on simulated dataset)")
+        if risk_score >= 7:
             st.write("- **Risk Level**: High")
-            st.write("- **Prediction**: Even though no defects are currently visible, the door/floor is at high risk of developing issues (e.g., cracks, wear) soon due to its age, usage, and environmental conditions.")
+            st.write("- **Prediction**: The door/floor is at high risk of developing defects soon due to its age, usage, temperature, and moisture conditions.")
             st.write("- **Recommendation**: Schedule a thorough inspection within the next month and consider preventive maintenance, such as sealing or reinforcing the door/floor.")
-        elif risk_score >= 2:
+        elif risk_score >= 4:
             st.write("- **Risk Level**: Moderate")
-            st.write("- **Prediction**: The door/floor may develop defects in the near future, especially if conditions like usage or moisture exposure increase.")
+            st.write("- **Prediction**: The door/floor may develop defects in the near future, especially if conditions worsen.")
             st.write("- **Recommendation**: Monitor the door/floor regularly and schedule an inspection within the next 3 months.")
         else:
             st.write("- **Risk Level**: Low")
