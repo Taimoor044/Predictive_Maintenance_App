@@ -34,6 +34,13 @@ simulated_dataset = {
     ("new", "light", "low", "low"): 0.10,
 }
 
+# Deterioration rates for defects (severity points per month)
+base_deterioration_rates = {
+    'crack': 0.2,  # Cracks worsen faster
+    'dent': 0.1,
+    'scratch': 0.05,
+}
+
 # Streamlit app
 st.title("Fire Door and Floor Predictive Maintenance")
 st.write("Upload an image to detect defects and get maintenance predictions.")
@@ -127,6 +134,16 @@ if uploaded_file is not None:
             detections = f.readlines()
 
         st.write("### Detected Defects and Maintenance Recommendations:")
+        # Collect environmental factors for deterioration rate (ask here since defects are detected)
+        temperature = st.number_input("What is the average temperature the door/floor is exposed to (in °C)?", min_value=-50.0, max_value=100.0, value=20.0, step=1.0)
+        moisture_level = st.selectbox("What is the typical moisture level the door/floor is exposed to?", ["Low (e.g., dry environment)", "Medium (e.g., occasional humidity)", "High (e.g., frequent rain or humidity)"])
+        usage_frequency = st.selectbox("How often is the door/floor used?", ["Rarely (e.g., a few times a month)", "Moderately (e.g., daily)", "Heavily (e.g., multiple times a day)"])
+
+        # Map environmental factors to multipliers
+        temp_multiplier = 1.5 if temperature > 30 else 1.2 if temperature > 20 else 1.0
+        moisture_multiplier = 1.5 if moisture_level == "High (e.g., frequent rain or humidity)" else 1.3 if moisture_level == "Medium (e.g., occasional humidity)" else 1.0
+        usage_multiplier = 1.5 if usage_frequency == "Heavily (e.g., multiple times a day)" else 1.2 if usage_frequency == "Moderately (e.g., daily)" else 1.0
+
         for detection in detections:
             values = detection.strip().split()
             if len(values) == 6:
@@ -165,11 +182,27 @@ if uploaded_file is not None:
                 severity = 'Negligible'
                 priority = 'Low'
 
+            # Calculate time to worsen (reach severity score of 10)
+            deterioration_rate = base_deterioration_rates[class_name] * temp_multiplier * moisture_multiplier * usage_multiplier
+            target_severity = 10  # Critical severity
+            months_to_critical = (target_severity - severity_score) / deterioration_rate if deterioration_rate > 0 else float('inf')
+            months_to_critical = max(0, min(60, months_to_critical))  # Cap between 0 and 60 months
+            if months_to_critical == float('inf') or months_to_critical >= 60:
+                time_prediction = "No significant worsening expected within 5 years."
+            else:
+                years = int(months_to_critical // 12)
+                months = int(months_to_critical % 12)
+                if years > 0:
+                    time_prediction = f"Estimated to worsen to critical in approximately {years} year(s) and {months} month(s)."
+                else:
+                    time_prediction = f"Estimated to worsen to critical in approximately {months} month(s)."
+
             st.write(f"- **{class_name}** (Confidence: {conf:.2f})")
             st.write(f"  - **Dimensions**: Length = {defect_length_px:.1f}px, Width = {defect_width_px:.1f}px")
             st.write(f"  - **Severity Score**: {severity_score:.1f}/10")
             st.write(f"  - **Severity**: {severity}")
             st.write(f"  - **Priority**: {priority}")
+            st.write(f"  - **Time to Worsen**: {time_prediction}")
             if class_name == 'crack':
                 if severity == 'Severe':
                     st.write("  - **Recommendation**: Urgent action needed. Replace or reinforce the affected area immediately.")
@@ -236,18 +269,39 @@ if uploaded_file is not None:
         # Adjust risk score based on defect probability
         risk_score += (defect_probability * 5)  # Scale probability impact (max 4 points)
 
+        # Estimate time to defect formation (assuming starting severity of 0)
+        avg_deterioration_rate = sum(base_deterioration_rates.values()) / len(base_deterioration_rates)  # Average rate
+        temp_multiplier = 1.5 if temperature > 30 else 1.2 if temperature > 20 else 1.0
+        moisture_multiplier = 1.5 if moisture_level == "High (e.g., frequent rain or humidity)" else 1.3 if moisture_level == "Medium (e.g., occasional humidity)" else 1.0
+        usage_multiplier = 1.5 if usage_frequency == "Heavily (e.g., multiple times a day)" else 1.2 if usage_frequency == "Moderately (e.g., daily)" else 1.0
+        adjusted_rate = avg_deterioration_rate * temp_multiplier * moisture_multiplier * usage_multiplier
+        months_to_defect = (2 - 0) / adjusted_rate  # Time to reach a minor defect (severity 2)
+        months_to_defect = max(0, min(60, months_to_defect))  # Cap between 0 and 60 months
+        if months_to_defect >= 60:
+            time_prediction = "No defects expected within 5 years."
+        else:
+            years = int(months_to_defect // 12)
+            months = int(months_to_defect % 12)
+            if years > 0:
+                time_prediction = f"Defects may appear in approximately {years} year(s) and {months} month(s)."
+            else:
+                time_prediction = f"Defects may appear in approximately {months} month(s)."
+
         # Make an educated prediction
         st.write("### Maintenance Prediction Based on Conditions:")
         st.write(f"- **Estimated Defect Probability**: {defect_probability * 100:.0f}% (based on simulated dataset)")
         if risk_score >= 7:
             st.write("- **Risk Level**: High")
+            st.write(f"- **Time to Potential Defects**: {time_prediction}")
             st.write("- **Prediction**: The door/floor is at high risk of developing defects soon due to its age, usage, temperature, and moisture conditions.")
             st.write("- **Recommendation**: Schedule a thorough inspection within the next month and consider preventive maintenance, such as sealing or reinforcing the door/floor.")
         elif risk_score >= 4:
             st.write("- **Risk Level**: Moderate")
+            st.write(f"- **Time to Potential Defects**: {time_prediction}")
             st.write("- **Prediction**: The door/floor may develop defects in the near future, especially if conditions worsen.")
             st.write("- **Recommendation**: Monitor the door/floor regularly and schedule an inspection within the next 3 months.")
         else:
             st.write("- **Risk Level**: Low")
+            st.write(f"- **Time to Potential Defects**: {time_prediction}")
             st.write("- **Prediction**: The door/floor appears to be in good condition with low risk of defects in the near term.")
             st.write("- **Recommendation**: Continue regular maintenance and monitor for any changes.")
