@@ -42,7 +42,7 @@ base_deterioration_rates = {
 }
 
 # Streamlit app
-st.title("Fire Door and Floor Predictive Maintenance")
+st.title("Defect Analysis and Predictive Maintenance")
 st.write("Upload an image to detect defects and get maintenance predictions.")
 
 # File uploader
